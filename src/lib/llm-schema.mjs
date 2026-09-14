@@ -40,6 +40,9 @@ export const buildAnalysisPrompt = ({ goal, stepIndex = 1, choiceText, constrain
 
 // 宽容提取：允许模型包裹 ```json 代码块或携带前后缀说明文字
 export function extractJson(raw) {
+  // OpenAI 兼容接口可能返回 content 数组（text/tool 块），统一拼成文本。
+  if (Array.isArray(raw)) raw = raw.map((part) => typeof part === 'string' ? part : (part?.text || part?.content || '')).join('');
+  if (raw && typeof raw === 'object') raw = raw.text || raw.content || '';
   if (typeof raw !== 'string' || !raw.trim()) throw new Error('LLM 输出为空');
   let text = raw.trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -163,7 +166,18 @@ export async function generateAnalysis(input, { chat, fallback, model, timeoutMs
 
   const check = validateAnalysis(parsed, { requireNextOptions: input.initial === true });
   if (!check.ok) {
-    return { ok: false, stage: 'validate', error: check.errors.join('；'), data: useFallback(), meta: { source: 'fallback', latency_ms: raw.latencyMs, raw: String(raw.content).slice(0, 300) } };
+    // 保留模型已经生成的标题/正文/指标，仅用 Demo 字段补齐协议缺口。
+    // 这样模型偶尔漏掉 freshness、stage_plan 等非核心字段时，仍能展示真实分析。
+    const safe = useFallback() || {};
+    const repaired = {
+      ...safe,
+      ...parsed,
+      stage_plan: parsed.stage_plan?.length ? parsed.stage_plan : safe.stage_plan,
+      next_options: parsed.next_options?.length >= (input.initial ? 2 : 0) ? parsed.next_options : safe.next_options,
+      evidence: parsed.evidence?.length ? parsed.evidence : safe.evidence,
+      freshness: parsed.freshness?.length ? parsed.freshness : safe.freshness,
+    };
+    return { ok: true, stage: 'llm-partial', error: check.errors.join('；'), data: repaired, meta: { source: 'llm', latency_ms: raw.latencyMs, raw: String(raw.content).slice(0, 300) } };
   }
 
   return {

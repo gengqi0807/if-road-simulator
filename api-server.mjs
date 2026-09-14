@@ -109,7 +109,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/llm/ping') {
       try {
-        const result = await chat([{ role: 'user', content: url.searchParams.get('q') || '只回复两个字：收到' }], { timeoutMs: 15_000 });
+        const result = await chat([{ role: 'user', content: url.searchParams.get('q') || '只回复两个字：收到' }], { model: llmConfig().analysisModel, timeoutMs: 45_000 });
         return send(res, 200, { llm_ok: true, model: result.model, reply: result.content, has_reasoning: Boolean(result.reasoning), latency_ms: result.latencyMs });
       } catch (error) {
         return send(res, 502, error instanceof Error ? error.message : 'LLM 调用失败');
@@ -192,7 +192,7 @@ const server = http.createServer(async (req, res) => {
             history: [],
             evidence,
             initial: true,
-          }, { chat, fallback: () => null, model: llmConfig().analysisModel, timeoutMs: 15000 });
+          }, { chat, fallback: () => null, model: llmConfig().analysisModel, timeoutMs: 45_000 });
           generation = { ...generated.meta, stage: generated.stage, error: generated.error || null };
           if (generated.ok && !generated.data.terminal && generated.data.next_options?.length >= 2) {
             result.step.title = generated.data.title || result.step.title;
@@ -246,7 +246,7 @@ const server = http.createServer(async (req, res) => {
             if (liveEvidence.length) evidence = liveEvidence;
           } catch { /* 分析仍可使用会话中已有资料 */ }
         }
-          const generated = await generateAnalysis({ goal: session.goal, stepIndex: chosenStep.index, choiceText: chosenStep.choiceText, constraints: session.constraints, history, evidence, stagePlan: session.stagePlan || [] }, { chat, fallback, model: llmConfig().analysisModel, timeoutMs: 15000 });
+          const generated = await generateAnalysis({ goal: session.goal, stepIndex: chosenStep.index, choiceText: chosenStep.choiceText, constraints: session.constraints, history, evidence, stagePlan: session.stagePlan || [] }, { chat, fallback, model: llmConfig().analysisModel, timeoutMs: 45_000 });
         generation = { ...generated.meta, stage: generated.stage, error: generated.error || null };
         result.analysis = generated.data;
         if (generated.ok && generated.data?.terminal) {

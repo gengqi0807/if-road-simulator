@@ -6,6 +6,9 @@
 
 ```bash
 npm install
+# 终端 1：启动会读取 .env 的 API 服务
+npm run dev:api
+# 终端 2：启动 Vite 前端
 npm run dev
 ```
 

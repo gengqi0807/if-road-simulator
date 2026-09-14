@@ -51,6 +51,9 @@ export class DemoStore {
     const target = session.steps.find((step) => step.id === stepId);
     if (!target) throw new Error('step not found');
     const branch = { id: randomUUID(), sessionId: id, parentBranchId: target.branchId, forkStepId: target.id, name: `分支 ${session.branches.length}`, status: 'active' };
+    // 回溯即代表原路径在分叉点结束，结局页才能正确展示并比较两条路径。
+    const parentBranch = session.branches.find((item) => item.id === target.branchId);
+    if (parentBranch) parentBranch.status = 'ended';
     const template = target.index === 1
       ? buildGoalFirstStep(session.goal, session.constraints)
       : buildGoalNextStep(session.goal, target.index, target.choiceText || '');

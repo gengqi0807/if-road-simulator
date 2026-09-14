@@ -18,7 +18,7 @@ if (!isLlmConfigured()) {
 
 console.log('\n[2/3] 连通性测试（消耗 1 次额度）');
 try {
-  const reply = await chat([{ role: 'user', content: '只回复两个字：收到' }], { model: 'zhida-fast-1p5', timeoutMs: 15_000 });
+  const reply = await chat([{ role: 'user', content: '只回复两个字：收到' }], { model: 'zhida-fast-1p5', timeoutMs: 45_000 });
   console.log('  [OK] 调用成功');
   console.log('  回复     :', JSON.stringify(reply.content));
   console.log('  模型     :', reply.model);

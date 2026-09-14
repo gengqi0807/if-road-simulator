@@ -4,7 +4,9 @@
 
 const DEFAULT_BASE_URL = 'https://developer.zhihu.com/v1';
 const DEFAULT_MODEL = 'zhida-thinking-1p5';
-const REQUEST_TIMEOUT_MS = 20_000;
+// 直答模型在冷启动/深度推理时常超过 15 秒。优先等待真实结果，
+// 由调用方和云托管网关预留更长的总请求窗口。
+const REQUEST_TIMEOUT_MS = 45_000;
 
 export const SUPPORTED_MODELS = ['zhida-fast-1p5', 'zhida-thinking-1p5', 'zhida-agent'];
 
@@ -78,5 +80,5 @@ export async function chat(messages, options = {}) {
 
 // 轻量连通性探测：拿到简短回答即可确认密钥 + 时间戳鉴权有效
 export async function ping(question = '只回复两个字：收到', options = {}) {
-  return chat([{ role: 'user', content: question }], { model: 'zhida-fast-1p5', timeoutMs: 15_000, ...options });
+  return chat([{ role: 'user', content: question }], { model: 'zhida-fast-1p5', timeoutMs: 45_000, ...options });
 }

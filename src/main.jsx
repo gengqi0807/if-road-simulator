@@ -1021,7 +1021,38 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
         remoteAnalysis = mapApiAnalysis(remote.analysis, remote.generation);
         remoteNext = remote.next_step;
         remoteEnded = Boolean(remote.ended || remoteNext?.terminal || remote.analysis?.terminal);
-      } catch { /* local demo fallback */ }
+      } catch {
+        // 云托管实例重启后内存会话会丢失。改用无状态 LLM 分析恢复，
+        // 避免旧 apiSessionId 让整条后续路径永久降级为本地 Demo。
+        try {
+          const query = new URLSearchParams({ goal: branch.goal || '', step: String(currentStepIndex), choice: selectedOption.text });
+          const recovered = await apiRequest(`/api/llm/analyze?${query}`);
+          remoteAnalysis = mapApiAnalysis(recovered.analysis, recovered);
+          const nextOptions = recovered.analysis?.next_options || [];
+          remoteEnded = Boolean(recovered.analysis?.terminal);
+          remoteNext = remoteEnded ? { terminal: true } : (nextOptions.length >= 2 ? {
+            index: currentStepIndex + 1,
+            title: recovered.analysis?.next_question || buildGoalNextStep(branch.goal || '', currentStepIndex + 1, selectedOption.text).title,
+            options: nextOptions,
+            totalSteps: recovered.analysis?.total_steps || branch.totalSteps || DEFAULT_TOTAL_STEPS,
+          } : null);
+        } catch { /* LLM 本身失败时才使用本地安全降级 */ }
+      }
+    }
+    if (!branch.apiSessionId) {
+      try {
+        const query = new URLSearchParams({ goal: branch.goal || '', step: String(currentStepIndex), choice: selectedOption.text });
+        const recovered = await apiRequest(`/api/llm/analyze?${query}`);
+        remoteAnalysis = mapApiAnalysis(recovered.analysis, recovered);
+        const nextOptions = recovered.analysis?.next_options || [];
+        remoteEnded = Boolean(recovered.analysis?.terminal);
+        remoteNext = remoteEnded ? { terminal: true } : (nextOptions.length >= 2 ? {
+          index: currentStepIndex + 1,
+          title: recovered.analysis?.next_question || buildGoalNextStep(branch.goal || '', currentStepIndex + 1, selectedOption.text).title,
+          options: nextOptions,
+          totalSteps: recovered.analysis?.total_steps || branch.totalSteps || DEFAULT_TOTAL_STEPS,
+        } : null);
+      } catch { /* LLM 本身失败时才使用本地安全降级 */ }
     }
     const resolvedAnalysis = remoteAnalysis || { ...buildLocalGoalAnalysis(branch.goal, selectedOption), generationSource: 'fallback', generationStage: 'request' };
     const nextRecord = createStepRecord(currentStepIndex, selectedOption, currentApiStepId, currentOptions, resolvedAnalysis);
@@ -1173,20 +1204,47 @@ function App() {
       } catch { /* local branch fallback */ }
     }
     const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), currentBranch.id, stepIndex, currentBranch.steps.filter((step) => step.stepIndex <= stepIndex)), totalSteps: currentBranch.totalSteps || currentSession.totalSteps || DEFAULT_TOTAL_STEPS, stagePlan: currentBranch.stagePlan || currentSession.stagePlan || [], goal: currentSession.goal, goalFirstStep: currentBranch.goalFirstStep || buildGoalFirstStep(currentSession.goal), apiSessionId: currentBranch.apiSessionId, apiBranchId, apiStepId, remoteStep };
-    const nextSession = { ...currentSession, branches: [...currentSession.branches, branch], activeBranchId: branch.id, branchCounter: nextCounter };
+    const nextSession = {
+      ...currentSession,
+      // 分叉点之前的原路径视为已完成，确保结局页可同时比较原路径与新分支。
+      branches: currentSession.branches.map((item) => item.id === currentBranch.id ? { ...item, status: 'ended' } : item).concat(branch),
+      activeBranchId: branch.id,
+      branchCounter: nextCounter,
+    };
     updateSession(nextSession);
     setActiveSessionId(nextSession.id);
     setResumeStep(stepIndex);
     navigate(`/simulate/${nextSession.id}`, { stage: 'simulation', sessionId: nextSession.id });
   };
 
-  const createNewBranch = (sessionId) => {
+  const createNewBranch = async (sessionId) => {
     const session = sessions.find((item) => item.id === sessionId);
     const parentBranch = session?.branches.find((branch) => branch.id === route.branchId) || session?.branches.find((branch) => branch.id === session.activeBranchId);
     if (!session || !parentBranch) return;
 
     const nextCounter = session.branchCounter + 1;
-    const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), parentBranch.id, 0), goal: session.goal, goalFirstStep: parentBranch.goalFirstStep || buildGoalFirstStep(session.goal) };
+    let apiBranchId = null;
+    let remoteStep = null;
+    let apiStepId = parentBranch.steps.find((step) => step.stepIndex === 1)?.apiStepId || parentBranch.apiStepId || parentBranch.remoteStep?.id || null;
+    if (parentBranch.apiSessionId && apiStepId) {
+      try {
+        const remote = await apiRequest(`/api/sessions/${parentBranch.apiSessionId}/backtrack`, { method: 'POST', body: JSON.stringify({ step_id: apiStepId }) });
+        apiBranchId = remote.branch?.id || null;
+        remoteStep = remote.step || null;
+        apiStepId = remoteStep?.id || apiStepId;
+      } catch { /* 远程分支不可用时才回退本地 */ }
+    }
+    const branch = {
+      ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), parentBranch.id, 0),
+      goal: session.goal,
+      goalFirstStep: parentBranch.goalFirstStep || buildGoalFirstStep(session.goal),
+      totalSteps: parentBranch.totalSteps || session.totalSteps || DEFAULT_TOTAL_STEPS,
+      stagePlan: parentBranch.stagePlan || session.stagePlan || [],
+      apiSessionId: parentBranch.apiSessionId || null,
+      apiBranchId,
+      apiStepId,
+      remoteStep,
+    };
     const nextSession = {
       ...session,
       branches: [...session.branches, branch],
