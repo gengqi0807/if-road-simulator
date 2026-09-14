@@ -159,12 +159,19 @@ function EntryGate({ onQuickStart, onZhihuLogin, onHistory }) {
     window.history.replaceState({}, '', '/');
     setIsLoading(true);
     fetch('/api/auth/zhihu/me')
-      .then((response) => response.json())
-      .then((payload) => setNotice(payload?.data?.user?.name ? `欢迎你，${payload.data.user.name}` : '知乎登录成功'))
-      .catch(() => setNotice('知乎登录成功'))
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok || !payload?.data?.user) {
+          throw new Error(payload?.error || `会话校验失败（${response.status}）`);
+        }
+        setNotice(`欢迎你，${payload.data.user.name || '知乎用户'}`);
+        onZhihuLogin();
+      })
+      .catch((error) => {
+        setNotice(`知乎登录未完成：${error.message}`);
+      })
       .finally(() => {
         setIsLoading(false);
-        onZhihuLogin();
       });
   }, []);
 

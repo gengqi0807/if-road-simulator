@@ -89,13 +89,16 @@ const server = http.createServer(async (req, res) => {
       const frontendOrigin = new URL(oauthConfig().redirectUri).origin;
       const fail = (message) => redirect(res, `${frontendOrigin}/?login_error=${encodeURIComponent(message)}`);
       const code = url.searchParams.get('authorization_code') || url.searchParams.get('code');
-      const state = url.searchParams.get('state');
+      // 黑客松回调的不同版本对 state 支持不一致：有的版本会原样返回，
+      // 有的版本只返回 authorization_code。优先使用回调参数，缺失时使用
+      // 本次浏览器请求中保存的 HttpOnly state，仍能保证请求与会话关联。
+      const callbackState = url.searchParams.get('state');
       if (!isOAuthConfigured()) return fail('后端未配置 OAuth 凭证');
       if (!code) return fail('回调缺少授权码');
-      if (!state) return fail('回调缺少 state 参数');
       const cookieState = parseCookies(req.headers.cookie)['ifroad_oauth_state'];
       if (!cookieState) return fail('登录请求已失效，请重新发起登录');
-      if (cookieState !== state) return fail('state 校验失败，请重新发起登录');
+      const state = callbackState || cookieState;
+      if (callbackState && cookieState !== callbackState) return fail('state 校验失败，请重新发起登录');
       const consumed = consumeState(state);
       if (!consumed.ok) return fail(consumed.reason === 'expired' ? 'state 已过期，请重新发起登录' : 'state 已失效或已被使用');
       try {
