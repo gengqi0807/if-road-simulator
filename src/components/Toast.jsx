@@ -5,6 +5,7 @@ const ToastContext = createContext(null);
 export function ToastProvider({ children }) {
   const [toast, setToast] = useState(null);
   const [offlineVisible, setOfflineVisible] = useState(true);
+  const [serviceMode, setServiceMode] = useState('checking');
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -16,11 +17,22 @@ export function ToastProvider({ children }) {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    let active = true;
+    fetch('/api/health')
+      .then((response) => response.json())
+      .then((payload) => {
+        if (active) setServiceMode(payload?.data?.mode === 'live' ? 'live' : 'demo');
+      })
+      .catch(() => { if (active) setServiceMode('demo'); });
+    return () => { active = false; };
+  }, []);
+
   return (
     <ToastContext.Provider value={{ showToast }}>
       {offlineVisible ? (
         <div className="offline-demo-banner" role="status">
-          <span>当前为离线 Demo 模式，数据为预置内容</span>
+          <span>{serviceMode === 'live' ? '在线模式：知乎实时数据，服务异常时自动回退 Demo' : serviceMode === 'checking' ? '正在检查知乎服务状态…' : '当前为 Demo 兜底模式，数据为预置内容'}</span>
           <button type="button" aria-label="关闭离线 Demo 提示" onClick={() => setOfflineVisible(false)}>关闭</button>
         </div>
       ) : null}

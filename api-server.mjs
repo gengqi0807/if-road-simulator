@@ -16,6 +16,7 @@ import {
 import { analysisFor, demoPath } from './src/lib/demo-data.js';
 import { chat, isLlmConfigured, llmConfig, maskKey, SUPPORTED_MODELS } from './src/lib/zhihu-llm.mjs';
 import { generateAnalysis } from './src/lib/llm-schema.mjs';
+import { isZhihuContentConfigured, searchZhihu } from './src/lib/zhihu-content.mjs';
 
 const port = Number(process.env.API_PORT || 8787);
 
@@ -45,7 +46,15 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return send(res, 204, null);
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
-    if (req.method === 'GET' && url.pathname === '/api/health') return send(res, 200, { service: 'if-road-api', mode: 'demo', uptime: process.uptime() });
+    if (req.method === 'GET' && url.pathname === '/api/health') return send(res, 200, { service: 'if-road-api', mode: isLlmConfigured() || isZhihuContentConfigured() ? 'live' : 'demo', uptime: process.uptime(), capabilities: { oauth: isOAuthConfigured(), llm: isLlmConfigured(), zhihu_search: isZhihuContentConfigured() } });
+    if (req.method === 'GET' && url.pathname === '/api/zhihu/search') {
+      try {
+        const items = await searchZhihu(url.searchParams.get('q'), { count: url.searchParams.get('count') });
+        return send(res, 200, { source: 'zhihu', items });
+      } catch (error) {
+        return send(res, 502, error instanceof Error ? error.message : '知乎搜索失败');
+      }
+    }
     // ---- 成员 C：LLM 能力（零侵入，仅在既有服务上追加只读路由）----
     if (req.method === 'GET' && url.pathname === '/api/llm/config') {
       const cfg = llmConfig();
@@ -136,6 +145,31 @@ const server = http.createServer(async (req, res) => {
       const input = await readJson(req);
       if (typeof input.option_key !== 'string') return send(res, 400, 'option_key is required');
       const result = demoStore.choose(chooseMatch[1], input.option_key);
+      // 实时能力优先：LLM/知乎不可用时保留 DemoStore 分析，保证主流程不中断。
+      const session = result.session;
+      const chosenStep = [...session.steps].reverse().find((step) => step.choiceKey === input.option_key && step.analysis);
+      if (isLlmConfigured() && chosenStep) {
+        const fallback = () => result.analysis;
+        const generated = await generateAnalysis({ goal: session.goal, stepIndex: chosenStep.index, choiceText: chosenStep.choiceText, constraints: session.constraints }, { chat, fallback });
+        result.analysis = generated.data;
+        if (generated.ok && Array.isArray(generated.data?.next_options) && result.nextStep) {
+          // 下一步选项由模型根据目标、约束和当前选择生成；模型失败时保留 Demo 模板。
+          result.nextStep.options = generated.data.next_options.slice(0, 4).map((option) => ({
+            key: option.key,
+            text: option.text,
+            meta: option.meta || '根据当前路径动态生成',
+          }));
+        }
+      }
+    if (isZhihuContentConfigured()) {
+        try {
+          const evidence = await searchZhihu(`${session.goal} ${chosenStep?.choiceText || ''}`, { count: 5 });
+          if (evidence.length) result.analysis = { ...result.analysis, evidence };
+        } catch { /* source failure falls back to bundled evidence */ }
+      }
+      if (result.nextStep && Array.isArray(result.analysis?.next_options) && result.analysis.next_options.length >= 2) {
+        result.nextStep.options = result.analysis.next_options.slice(0, 4).map((option) => ({ key: option.key, text: option.text, meta: option.meta || '根据当前路径动态生成' }));
+      }
       return send(res, 200, { session: result.session, analysis: result.analysis, next_step: result.nextStep });
     }
     const timelineMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/timeline$/);

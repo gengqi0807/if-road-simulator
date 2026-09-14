@@ -79,7 +79,8 @@ function getOptionsForStep(stepIndex) {
 }
 
 const totalDecisionSteps = 5;
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8787';
+// 同源部署时使用 Vite/反向代理转发 /api；跨域部署可通过 VITE_API_BASE 覆盖。
+const API_BASE = import.meta.env.VITE_API_BASE || '';
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
@@ -116,7 +117,7 @@ function getBranchName(counter) {
   return `分支 ${name}`;
 }
 
-function createStepRecord(stepIndex, option, apiStepId = null) {
+function createStepRecord(stepIndex, option, apiStepId = null, options = []) {
   return {
     stepIndex,
     optionKey: option.key,
@@ -126,6 +127,7 @@ function createStepRecord(stepIndex, option, apiStepId = null) {
     sourceCount: demoAnalysis.sources.length,
     expiredSourceCount: stepIndex === 3 ? 1 : 0,
     apiStepId,
+    options,
   };
 }
 
@@ -204,7 +206,7 @@ function EntryGate({ onQuickStart, onZhihuLogin, onHistory }) {
           <button className="outline-nav-button" type="button" onClick={onHistory}>历史</button>
           <div className="demo-badge">
             <span className="status-dot" />
-            Demo 模式 · 离线可用
+          知乎实时数据 · Demo 兜底
           </div>
         </div>
       </header>
@@ -302,7 +304,7 @@ function GoalForm({ initialGoal, onSubmit }) {
 
         <div className="demo-badge">
           <span className="status-dot" />
-          Demo 模式
+          知乎实时数据 · Demo 兜底
         </div>
       </header>
 
@@ -1029,12 +1031,12 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
   const apiOptions = remoteStep && remoteStep.index === currentStepIndex
     ? remoteStep.options.map((option) => ({ key: option.key, text: option.text, meta: option.meta || '' }))
     : null;
-  const currentOptions = apiOptions || (currentStepIndex === 1
+  const currentOptions = apiOptions || (currentRecord?.options?.length ? currentRecord.options : null) || (currentStepIndex === 1
     ? firstStepOptions
     : currentStepIndex === 2
       ? getNextOptions(1, branch.steps.find((step) => step.stepIndex === 1)?.optionKey || 'B')
       : getOptionsForStep(currentStepIndex));
-  const currentStep = { title: stepTitles[currentStepIndex - 1], options: currentOptions, stepIndex: currentStepIndex, totalSteps: totalDecisionSteps };
+  const currentStep = { title: remoteStep?.title || stepTitles[currentStepIndex - 1], options: currentOptions, stepIndex: currentStepIndex, totalSteps: totalDecisionSteps };
   const metrics = [
     { label: '时间', value: Math.max(72 - branch.steps.length * 5, 0), tone: 'blue' },
     { label: '掌握度', value: Math.min(18 + branch.steps.length * 8, 100), tone: 'green' },
@@ -1048,7 +1050,7 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
     setIsAnalyzing(true);
     let remoteAnalysis = null;
     let remoteNext = null;
-    if (branch.apiSessionId && currentStepIndex <= 3) {
+    if (branch.apiSessionId) {
       try {
         const remote = await apiRequest(`/api/sessions/${branch.apiSessionId}/choose`, { method: 'POST', body: JSON.stringify({ option_key: selectedKey }) });
         remoteAnalysis = mapApiAnalysis(remote.analysis);
@@ -1056,7 +1058,7 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
       } catch { /* local demo fallback */ }
     }
     window.setTimeout(() => {
-      const nextRecord = createStepRecord(currentStepIndex, selectedOption, currentApiStepId);
+      const nextRecord = createStepRecord(currentStepIndex, selectedOption, currentApiStepId, currentOptions);
       const nextSteps = [...branch.steps.filter((step) => step.stepIndex !== currentStepIndex && step.stepIndex < currentStepIndex), nextRecord]
         .sort((left, right) => left.stepIndex - right.stepIndex);
       const nextBranch = { ...branch, steps: nextSteps };

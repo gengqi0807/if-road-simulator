@@ -24,7 +24,7 @@ export const buildAnalysisPrompt = ({ goal, stepIndex = 1, choiceText, constrain
       `当前是第 ${stepIndex} 步决策。`,
       `用户选择：${choiceText}`,
       `约束条件：${JSON.stringify(constraints)}`,
-      '请严格按下列结构输出 JSON（字段名与类型必须一致；time_days 单位为天，其余为 0-1 的小数）：',
+      '请严格按下列结构输出 JSON（字段名与类型必须一致；time_days 单位为天，其余为 0-1 的小数）。next_options 必须是 2-4 个互不重复、适合该学习目标和当前路径的下一步选择，key 依次使用 A、B、C、D：',
       ANALYSIS_SHAPE,
     ].join('\n'),
   },
@@ -71,7 +71,14 @@ export function validateAnalysis(value) {
     if (!isText(item?.level) || !isText(item?.reason)) errors.push(`freshness[${i}] 需要 { level, reason }`);
   });
 
-  if (!Array.isArray(value.next_options)) errors.push('next_options 不是数组');
+  if (!Array.isArray(value.next_options) || value.next_options.length < 2) errors.push('next_options 至少需要 2 个选项');
+  else value.next_options.forEach((item, i) => {
+    if (!/^[A-Z]$/.test(item?.key || '') || !isText(item?.text)) errors.push(`next_options[${i}] 需要 { key, text }`);
+  });
+  if (Array.isArray(value.next_options)) {
+    const keys = value.next_options.map((item) => item?.key);
+    if (new Set(keys).size !== keys.length) errors.push('next_options 的 key 不能重复');
+  }
 
   return { ok: errors.length === 0, errors };
 }
