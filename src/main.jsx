@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowRight, CalendarRange, Clock3, History, Sparkles, Target, UserRound } from 'lucide-react';
 import './styles.css';
@@ -147,15 +147,46 @@ function EntryGate({ onQuickStart, onZhihuLogin, onHistory }) {
   const [isLoading, setIsLoading] = useState(false);
   const [notice, setNotice] = useState('');
 
-  const handleZhihuLogin = () => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get('login_error');
+    if (error) {
+      setNotice(`知乎登录失败：${error}`);
+      window.history.replaceState({}, '', '/');
+      return;
+    }
+    if (params.get('login') !== 'success') return;
+    window.history.replaceState({}, '', '/');
+    setIsLoading(true);
+    fetch('/api/auth/zhihu/me')
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.ok || !payload?.data?.user) {
+          throw new Error(payload?.error || `会话校验失败（${response.status}）`);
+        }
+        setNotice(`欢迎你，${payload.data.user.name || '知乎用户'}`);
+        onZhihuLogin();
+      })
+      .catch((error) => {
+        setNotice(`知乎登录未完成：${error.message}`);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  const handleZhihuLogin = async () => {
     setIsLoading(true);
     setNotice('');
-
-    window.setTimeout(() => {
+    try {
+      const response = await fetch('/api/auth/zhihu/start');
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || `登录服务不可用（${response.status}）`);
+      window.location.href = payload.data.authorize_url;
+    } catch (error) {
       setIsLoading(false);
-      setNotice('OAuth 接入中，已切换为体验模式');
-      onZhihuLogin();
-    }, 800);
+      setNotice(`无法发起知乎登录：${error.message}`);
+    }
   };
 
   return (
@@ -1232,3 +1263,4 @@ createRoot(document.getElementById('root')).render(
     <App />
   </ToastProvider>,
 );
+

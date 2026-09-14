@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --primary-blue: #1859D4;
   --deep-blue: #0C2340;
   --bg-page: #F6F9FE;
@@ -2601,3 +2601,4 @@ button:disabled {
     padding-left: 13px;
   }
 }
+

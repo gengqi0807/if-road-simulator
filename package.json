@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:api": "node api-server.mjs",
+    "dev:api": "node --env-file=.env api-server.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "test:store": "node scripts/test-store.mjs",
     "test:api": "node scripts/test-api.mjs",
     "test:branch": "node scripts/test-branch.mjs",
-    "test:report": "node scripts/test-report.mjs"
+    "test:report": "node scripts/test-report.mjs",
+    "test:llm": "node --env-file=.env scripts/test-llm.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
