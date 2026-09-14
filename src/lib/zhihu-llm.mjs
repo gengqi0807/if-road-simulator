@@ -13,6 +13,7 @@ export const llmConfig = () => ({
   // 未单独配置 LLM Key 时，回退复用 OAuth Access Secret（同一把开发者凭证）
   apiKey: process.env.ZHIHU_LLM_API_KEY || process.env.ZHIHU_ACCESS_SECRET || '',
   model: process.env.ZHIHU_LLM_MODEL || DEFAULT_MODEL,
+  analysisModel: process.env.ZHIHU_LLM_ANALYSIS_MODEL || 'zhida-fast-1p5',
 });
 
 export function isLlmConfigured() {

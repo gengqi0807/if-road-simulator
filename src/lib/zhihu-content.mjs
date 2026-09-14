@@ -1,5 +1,7 @@
 // 知乎开放平台内容 Provider。Access Secret 仅在服务端使用。
 const BASE_URL = 'https://developer.zhihu.com/api/v1/content/zhihu_search';
+const searchCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function isZhihuContentConfigured() {
   return Boolean(process.env.ZHIHU_ACCESS_SECRET);
@@ -9,9 +11,14 @@ export async function searchZhihu(query, { count = 5, timeoutMs = 8000 } = {}) {
   const secret = process.env.ZHIHU_ACCESS_SECRET;
   if (!secret) throw new Error('知乎内容 API 未配置 Access Secret');
   if (!query || !String(query).trim()) throw new Error('搜索关键词不能为空');
+  const normalizedQuery = String(query).trim().slice(0, 120);
+  const normalizedCount = Math.min(Math.max(Number(count) || 5, 1), 10);
+  const cacheKey = `${normalizedQuery}\n${normalizedCount}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < CACHE_TTL_MS) return cached.items;
   const url = new URL(BASE_URL);
-  url.searchParams.set('Query', String(query).trim());
-  url.searchParams.set('Count', String(Math.min(Math.max(Number(count) || 5, 1), 10)));
+  url.searchParams.set('Query', normalizedQuery);
+  url.searchParams.set('Count', String(normalizedCount));
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${secret}`,
@@ -28,7 +35,7 @@ export async function searchZhihu(query, { count = 5, timeoutMs = 8000 } = {}) {
   }
   const data = payload.Data || payload.data || payload;
   const items = data.Items || data.items || [];
-  return items.map((item) => ({
+  const normalizedItems = items.map((item) => ({
     title: item.Title || item.title || '知乎内容',
     url: item.Url || item.url || item.Link || item.link || 'https://www.zhihu.com/',
     author: item.AuthorName || item.author || item.Author?.Name || '知乎用户',
@@ -42,4 +49,6 @@ export async function searchZhihu(query, { count = 5, timeoutMs = 8000 } = {}) {
     rankingScore: Number(item.RankingScore || item.ranking_score || 0),
     isDemo: false,
   }));
+  searchCache.set(cacheKey, { createdAt: Date.now(), items: normalizedItems });
+  return normalizedItems;
 }

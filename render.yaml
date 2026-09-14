@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: if-road-simulator
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: ZHIHU_ACCESS_SECRET
+        sync: false
+      - key: ZHIHU_LLM_BASE_URL
+        value: https://developer.zhihu.com/v1
+      - key: ZHIHU_LLM_MODEL
+        value: zhida-thinking-1p5
+      - key: ZHIHU_LLM_ANALYSIS_MODEL
+        value: zhida-fast-1p5
+      - key: ZHIHU_OAUTH_APP_ID
+        sync: false
+      - key: ZHIHU_OAUTH_APP_KEY
+        sync: false
+      - key: ZHIHU_OAUTH_REDIRECT_URI
+        sync: false

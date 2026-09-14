@@ -15,6 +15,18 @@ npm run dev
 
 完整的三人任务拆分、时间排期、验收标准和 API 降级方案见 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)。
 
+## 生产部署
+
+项目已支持由同一个 Node 服务同时提供前端页面和 `/api`。生产环境执行：
+
+```bash
+npm ci
+npm run build
+npm start
+```
+
+可直接使用仓库根目录的 `render.yaml` 部署到 Render。部署面板中至少配置 `ZHIHU_ACCESS_SECRET`；需要知乎登录时，再配置 OAuth 三项变量，并将 `ZHIHU_OAUTH_REDIRECT_URI` 设置为 `https://你的域名/api/auth/zhihu/callback`。所有外部变量缺失时，网站仍会使用 Demo 数据完成核心流程。
+
 ## 实现边界
 
 - OAuth：黑客松 OAuth，服务端校验 `state`，Token 不下发浏览器。

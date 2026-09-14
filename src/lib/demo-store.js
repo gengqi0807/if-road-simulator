@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { analysisFor, buildGoalFirstStep, demoPath } from './demo-data.js';
+import { analysisFor, buildGoalFirstStep, buildGoalNextStep, demoPath } from './demo-data.js';
 import { isValidSessionInput } from './types.js';
 
 export class DemoStore {
@@ -14,6 +14,7 @@ export class DemoStore {
     const session = {
       id, goal: input.goal.trim(), scene: input.scene || 'subject',
       constraints: input.constraints || demoPath.constraints, status: 'active',
+      totalSteps: 8, stagePlan: [],
       currentStepId: first.id, rootBranchId: rootBranch.id, steps: [first], branches: [rootBranch], createdAt: new Date().toISOString(),
     };
     this.sessions.set(id, session);
@@ -29,13 +30,16 @@ export class DemoStore {
     if (!current) throw new Error('current step not found');
     const option = current.options.find((item) => item.key === optionKey);
     if (!option) throw new Error('invalid option_key');
-    const analysis = analysisFor(current.index, option);
+    const analysis = analysisFor(current.index, option, session.goal);
     current.choiceKey = option.key; current.choiceText = option.text; current.analysis = analysis;
-    const nextTemplate = demoPath.steps[Math.min(current.index, demoPath.steps.length - 1)];
-    const next = this.#makeStep(id, current.branchId, current.index + 1, nextTemplate, current.id, null);
+    // Demo fallback 也必须围绕用户目标生成后续问题，不能复用洛必达模板。
+    // 保留洛必达的既有演示路径以兼容历史演示数据。
+    const nextTemplate = /洛必达|极限|微积分/.test(session.goal)
+      ? demoPath.steps[Math.min(current.index, demoPath.steps.length - 1)]
+      : buildGoalNextStep(session.goal, current.index + 1, option.text);
+    const next = current.index >= (session.totalSteps || 8) ? null : this.#makeStep(id, current.branchId, current.index + 1, nextTemplate, current.id, null);
     next.analysis = null;
-    session.steps.push(next); session.currentStepId = next.id;
-    if (next.index > demoPath.steps.length) session.status = 'ended';
+    if (next) { session.steps.push(next); session.currentStepId = next.id; }
     return { analysis, nextStep: next, session };
   }
 
@@ -49,7 +53,7 @@ export class DemoStore {
     const branch = { id: randomUUID(), sessionId: id, parentBranchId: target.branchId, forkStepId: target.id, name: `分支 ${session.branches.length}`, status: 'active' };
     const template = target.index === 1
       ? buildGoalFirstStep(session.goal, session.constraints)
-      : demoPath.steps[Math.max(0, Math.min(target.index - 1, demoPath.steps.length - 1))];
+      : buildGoalNextStep(session.goal, target.index, target.choiceText || '');
     const step = this.#makeStep(id, branch.id, target.index, template, target.parentStepId, null);
     session.branches.push(branch); session.steps.push(step); session.currentStepId = step.id; session.status = 'active';
     return { session, branch, step };

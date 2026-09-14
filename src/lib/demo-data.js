@@ -65,6 +65,30 @@ export function buildGoalFirstStep(goal = '', constraints = {}) {
     };
   }
 
+  if (has('日语', '日文', '日语能力', 'jlpt', 'n1', 'n2', 'n3', 'n4', 'n5')) {
+    return {
+      title: `为了${suffix}，你准备先从哪一步开始？`,
+      options: [
+        { key: 'A', text: '先做日语水平摸底，确认五十音、词汇和听力短板', meta: '诊断 · 找到最值得投入的环节' },
+        { key: 'B', text: '先掌握五十音和基础发音，再进入入门语法', meta: '基础 · 建立可持续输入' },
+        { key: 'C', text: '跟着一套初级教材完成第一课到对话练习', meta: '跟练 · 尽快形成学习闭环' },
+        { key: 'D', text: '先确定 JLPT 等级目标，倒排每天的词汇与听力任务', meta: '规划 · 让目标可衡量' },
+      ],
+    };
+  }
+
+  if (has('六级', '四级', '考试', '备考', '考研')) {
+    return {
+      title: `为了${suffix}，你准备先锁定哪项突破？`,
+      options: [
+        { key: 'A', text: '先做一套摸底题，定位听力、阅读、写作等短板', meta: '诊断 · 先确定提分优先级' },
+        { key: 'B', text: '先按考试要求整理高频词汇和核心语法', meta: '基础 · 建立稳定输入' },
+        { key: 'C', text: '直接按考试时间练一套真题，适应节奏', meta: '实战 · 快速校准时间分配' },
+        { key: 'D', text: '先制定到考试日期的周计划和每日任务', meta: '规划 · 保证长期执行' },
+      ],
+    };
+  }
+
   if (has('编程', '代码', 'python', 'javascript', 'java', '程序')) {
     return {
       title: `为了${suffix}，你准备怎样开始？`,
@@ -101,15 +125,50 @@ export function buildGoalFirstStep(goal = '', constraints = {}) {
   };
 }
 
-export const analysisFor = (stepIndex, choice) => ({
+export function buildGoalNextStep(goal = '', stepIndex = 2, choiceText = '') {
+  const normalized = String(goal).toLowerCase();
+  const exam = /六级|四级|雅思|托福|考试|考研|备考/.test(normalized);
+  const coding = /编程|代码|python|javascript|java|程序/.test(normalized);
+  const japanese = /日语|日文|jlpt|n[1-5]/i.test(normalized);
+  const title = `第 ${stepIndex} 步：围绕目标继续推进，你会怎么做？`;
+  if (exam) return { title, options: [
+    { key: 'A', text: '根据刚才的结果，优先补齐最薄弱的题型', meta: '诊断 · 提高投入回报' },
+    { key: 'B', text: '按考试时间做一套完整真题并严格计时', meta: '实战 · 校准考试节奏' },
+    { key: 'C', text: '整理错题并追溯对应的词汇、语法或方法', meta: '复盘 · 降低重复失分' },
+    { key: 'D', text: '保持当前节奏，先完成今天的学习任务', meta: '稳态 · 防止计划中断' },
+  ] };
+  if (coding) return { title, options: [
+    { key: 'A', text: '把刚才的思路拆成一个可运行的小功能', meta: '实践 · 快速验证' },
+    { key: 'B', text: '查阅官方文档，补齐关键概念', meta: '基础 · 减少隐性坑' },
+    { key: 'C', text: '调试并记录错误，形成可复用排查清单', meta: '复盘 · 提升独立解决能力' },
+    { key: 'D', text: '换一个相近的小任务迁移练习', meta: '迁移 · 检验是否真正掌握' },
+  ] };
+  if (japanese) return { title, options: [
+    { key: 'A', text: '用五十音和发音小测验证基础，再补错漏', meta: '诊断 · 稳固入门基础' },
+    { key: 'B', text: '继续教材对话练习，并把新词放进例句', meta: '输入 · 建立语感' },
+    { key: 'C', text: '集中记忆本阶段高频词汇，第二天做听写复测', meta: '词汇 · 用间隔复习巩固' },
+    { key: 'D', text: '听一段对应等级的日语材料，记录听不懂的句子', meta: '听力 · 找到真实理解缺口' },
+  ] };
+  return { title, options: [
+    { key: 'A', text: `针对「${choiceText || '当前选择'}」做一次小练习，验证是否理解`, meta: '验证 · 用结果调整路径' },
+    { key: 'B', text: '查找可靠资料，补齐当前遇到的关键知识', meta: '补缺 · 降低卡点风险' },
+    { key: 'C', text: '把目标拆成更小的里程碑并完成下一项', meta: '推进 · 保持可执行' },
+    { key: 'D', text: '复盘当前进展，必要时调整学习策略', meta: '复盘 · 避免无效投入' },
+  ] };
+}
+
+export const analysisFor = (stepIndex, choice, goal = demoPath.goal) => {
+  const isCalculus = /洛必达|极限|微积分/.test(String(goal));
+  return {
   title: `你选了「${choice.text}」`,
-  content: stepIndex === 1
+  content: isCalculus && stepIndex === 1
     ? '预计 2 天能记住公式，但第 3 天会遇到“为什么必须是 0/0 或 ∞/∞”的适用前提问题。'
-    : '这条路径会降低卡点概率，但会增加约 2 天时间成本。',
-  pitfalls: [{ name: '适用前提', probability: 0.73 }],
+    : isCalculus ? '这条路径会降低卡点概率，但会增加约 2 天时间成本。' : `围绕「${goal}」的这次选择会改变后续节奏。建议用一次小测或练习验证效果，再决定是否调整路径。`,
+  pitfalls: [{ name: isCalculus ? '适用前提' : '执行与复盘不足', probability: isCalculus ? 0.73 : 0.42 }],
   metrics_delta: { time_days: 2, mastery: 0.14, exam_benefit: 0.1, risk: 0.08 },
   next_options: [],
-  evidence: [{ title: '洛必达法则适用前提讨论', url: 'https://www.zhihu.com/', year: 2024 }],
+  evidence: [{ title: isCalculus ? '洛必达法则适用前提讨论' : `${goal} 学习方法讨论`, url: 'https://www.zhihu.com/', year: 2024 }],
   freshness: [{ level: 'slightly_old', reason: '2019 年高赞回答，2024 年有更新' }],
   confidence: 0.86,
-});
+  };
+};

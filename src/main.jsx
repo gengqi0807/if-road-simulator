@@ -6,7 +6,7 @@ import HistoryListPage from './pages/HistoryListPage';
 import HistoryDetailPage from './pages/HistoryDetailPage';
 import ReportPage from './pages/ReportPage';
 import { ToastProvider } from './components/Toast';
-import { buildGoalFirstStep } from './lib/demo-data';
+import { buildGoalFirstStep, buildGoalNextStep } from './lib/demo-data';
 
 const defaultGoalForm = {
   goal: '',
@@ -17,61 +17,7 @@ const defaultGoalForm = {
   goalType: '期末',
 };
 
-const stepTitles = [
-  '你打算从哪里开始？',
-  '接下来，你准备怎样调整？',
-  '遇到卡住的题目时，你会怎么做？',
-  '怎样判断自己已经掌握？',
-  '最后，你想留下哪种学习节奏？',
-];
-
-const secondStepOptions = {
-  A: [
-    { key: 'A', text: '继续补充极限概念' },
-    { key: 'B', text: '做几道基础题确认理解' },
-    { key: 'C', text: '用图像建立直觉' },
-    { key: 'D', text: '尝试连接到洛必达' },
-  ],
-  B: [
-    { key: 'A', text: '回头补极限' },
-    { key: 'B', text: '继续硬扛' },
-    { key: 'C', text: '换几何直觉路线' },
-    { key: 'D', text: '先刷题，边刷边补' },
-  ],
-};
-
-const laterStepOptions = [
-  [
-    { key: 'A', text: '回到对应概念重新理解' },
-    { key: 'B', text: '先看提示再独立完成' },
-    { key: 'C', text: '跳过它，继续保持节奏' },
-    { key: 'D', text: '记录问题，集中复盘' },
-  ],
-  [
-    { key: 'A', text: '能解释核心概念' },
-    { key: 'B', text: '能独立完成基础题' },
-    { key: 'C', text: '能迁移到新题型' },
-    { key: 'D', text: '能讲给别人听' },
-  ],
-  [
-    { key: 'A', text: '稳定推进，保持每天练习' },
-    { key: 'B', text: '集中突破，解决关键难点' },
-    { key: 'C', text: '边学边用，结合真实问题' },
-    { key: 'D', text: '定期复盘，持续调整计划' },
-  ],
-];
-
-function getNextOptions(stepIndex, selectedKey) {
-  if (stepIndex === 1) return secondStepOptions[selectedKey] || secondStepOptions.A;
-  return laterStepOptions[stepIndex - 2] || laterStepOptions[laterStepOptions.length - 1];
-}
-
-function getOptionsForStep(stepIndex) {
-  if (stepIndex === 2) return secondStepOptions.B;
-  return laterStepOptions[stepIndex - 3] || laterStepOptions[laterStepOptions.length - 1];
-}
-
-const totalDecisionSteps = 5;
+const DEFAULT_TOTAL_STEPS = 8;
 // 同源部署时使用 Vite/反向代理转发 /api；跨域部署可通过 VITE_API_BASE 覆盖。
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 
@@ -82,8 +28,29 @@ async function apiRequest(path, options = {}) {
   return payload.data;
 }
 
-function mapApiAnalysis(value) {
-  return { ...demoAnalysis, title: value.title || demoAnalysis.title, summary: value.content || demoAnalysis.summary, blockers: (value.pitfalls || demoAnalysis.blockers).map((item) => typeof item === 'string' ? item : `${item.name}（${Math.round((item.probability || 0) * 100)}%）`), sources: (value.evidence || demoAnalysis.sources).map((item) => ({ ...item, author: item.author || '知乎来源', publishedAt: item.year ? `${item.year}-01-01` : item.publishedAt, isDemo: false })) };
+function mapApiAnalysis(value, generation = null) {
+  const delta = value.metrics_delta || {};
+  const signedDays = Number(delta.time_days || 0);
+  const signedPercent = (number) => `${number >= 0 ? '+' : ''}${Math.round(number * 100)}%`;
+  const freshnessLevel = value.freshness?.[0]?.level;
+  const freshness = freshnessLevel === 'expired' ? 'expired' : freshnessLevel === 'old' ? 'old' : freshnessLevel === 'slightly_old' ? 'recent' : 'fresh';
+  return {
+    ...demoAnalysis,
+    title: value.title || demoAnalysis.title,
+    summary: value.content || demoAnalysis.summary,
+    blockers: (value.pitfalls || []).map((item) => typeof item === 'string' ? item : `${item.name}（${Math.round((item.probability || 0) * 100)}%）`),
+    changes: [
+      { label: '时间', value: `${signedDays >= 0 ? '+' : ''}${signedDays} 天` },
+      { label: '掌握度', value: signedPercent(Number(delta.mastery || 0)) },
+      { label: '考试收益', value: signedPercent(Number(delta.exam_benefit || 0)) },
+      { label: '风险', value: signedPercent(Number(delta.risk || 0)) },
+    ],
+    freshness,
+    sources: (value.evidence || []).map((item) => ({ ...item, author: item.author || '知乎来源', publishedAt: item.year ? `${item.year}-01-01` : item.publishedAt, isDemo: false })),
+    terminal: Boolean(value.terminal), outcome: value.outcome || null, totalSteps: value.total_steps, stagePlan: value.stage_plan || [],
+    generationSource: generation?.source || 'llm',
+    generationStage: generation?.stage || 'llm',
+  };
 }
 
 function createBranch(id, name, parentBranchId = null, forkStepIndex = null, steps = []) {
@@ -96,6 +63,8 @@ function createBranch(id, name, parentBranchId = null, forkStepIndex = null, ste
     outcome: null,
     status: 'in_progress',
     createdAt: new Date().toISOString(),
+    totalSteps: DEFAULT_TOTAL_STEPS,
+    stagePlan: [],
   };
 }
 
@@ -110,17 +79,28 @@ function getBranchName(counter) {
   return `分支 ${name}`;
 }
 
-function createStepRecord(stepIndex, option, apiStepId = null, options = []) {
+function createStepRecord(stepIndex, option, apiStepId = null, options = [], analysis = null) {
   return {
     stepIndex,
     optionKey: option.key,
     optionText: option.text,
-    summary: stepIndex === 1 ? '先建立基础，再进入核心方法。' : '根据当前卡点调整学习路径。',
-    fullAnalysis: `${option.text}会改变后续的学习节奏。建议结合当前卡点及时复盘，并在下一步验证这条路径是否适合自己。`,
-    sourceCount: demoAnalysis.sources.length,
-    expiredSourceCount: stepIndex === 3 ? 1 : 0,
+    summary: analysis?.summary || (stepIndex === 1 ? '先建立基础，再进入核心方法。' : '根据当前卡点调整学习路径。'),
+    fullAnalysis: analysis?.summary || `${option.text}会改变后续的学习节奏。建议结合当前卡点及时复盘，并在下一步验证这条路径是否适合自己。`,
+    sourceCount: analysis?.sources?.length || 0,
+    expiredSourceCount: analysis?.sources?.filter((source) => source.freshness === 'expired').length || 0,
     apiStepId,
     options,
+  };
+}
+
+function buildLocalGoalAnalysis(goal, option) {
+  const label = goal || '当前目标';
+  return {
+    ...demoAnalysis,
+    title: `你选择了「${option.text}」`,
+    summary: `围绕「${label}」的这一步会影响后续学习节奏。建议完成一个小练习或测验，用结果验证当前路径，再决定下一步。`,
+    blockers: ['目标拆解与持续执行（42%）'],
+    sources: [{ title: `${label} 学习方法参考`, author: '目标化 Demo 资料', publishedAt: '—', url: 'https://www.zhihu.com/search?q=' + encodeURIComponent(label), isDemo: true }],
   };
 }
 
@@ -513,7 +493,7 @@ function AnalysisCard({ data, isLoading }) {
         <>
           <div className="analysis-card-header">
             <div>
-              <span className="analysis-kicker">AI 路径分析</span>
+              <span className="analysis-kicker">AI 路径分析 · {data.generationSource === 'llm' ? '实时生成' : '安全降级'}</span>
               <h2>{data.title}</h2>
             </div>
             <FreshnessBadge status={data.freshness} />
@@ -768,7 +748,7 @@ function OutcomePage({ branch, endedBranches, canCompare, onSwitchBranch, onBack
         <div>
           <span className="eyebrow-pill"><Sparkles size={15} /> 学习结局</span>
           <h1>{branch.name} · 路径结局</h1>
-          <p>这条路径已经完成 5 个决策点，下面是你的学习结果。</p>
+          <p>这条路径已经完成 {branch.steps.length} 个决策点，下面是你的学习结果。</p>
         </div>
         <span className="timeline-progress">已完成</span>
       </header>
@@ -1011,7 +991,8 @@ function MidwayBacktrackPanel({ steps, onConfirm }) {
 }
 
 function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOutcome }) {
-  const [currentStepIndex, setCurrentStepIndex] = useState(initialStepIndex || (branch.steps.length < totalDecisionSteps ? branch.steps.length + 1 : totalDecisionSteps));
+  const totalSteps = Math.min(10, Math.max(8, Number(branch.totalSteps) || DEFAULT_TOTAL_STEPS));
+  const [currentStepIndex, setCurrentStepIndex] = useState(initialStepIndex || (branch.steps.length < totalSteps ? branch.steps.length + 1 : totalSteps));
   const currentRecord = branch.steps.find((step) => step.stepIndex === currentStepIndex);
   const [selectedKey, setSelectedKey] = useState(currentRecord?.optionKey || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -1025,12 +1006,10 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
     ? remoteStep.options.map((option) => ({ key: option.key, text: option.text, meta: option.meta || '' }))
     : null;
   const goalFirstStep = branch.goalFirstStep || buildGoalFirstStep(branch.goal || '');
-  const currentOptions = apiOptions || (currentRecord?.options?.length ? currentRecord.options : null) || (currentStepIndex === 1
-    ? goalFirstStep.options
-    : currentStepIndex === 2
-      ? getNextOptions(1, branch.steps.find((step) => step.stepIndex === 1)?.optionKey || 'B')
-      : getOptionsForStep(currentStepIndex));
-  const currentStep = { title: remoteStep?.title || (currentStepIndex === 1 ? goalFirstStep.title : stepTitles[currentStepIndex - 1]), options: currentOptions, stepIndex: currentStepIndex, totalSteps: totalDecisionSteps };
+  const previousChoice = branch.steps.find((step) => step.stepIndex === currentStepIndex - 1)?.optionText || '';
+  const fallbackStep = currentStepIndex === 1 ? goalFirstStep : buildGoalNextStep(branch.goal || '', currentStepIndex, previousChoice);
+  const currentOptions = apiOptions || (currentRecord?.options?.length ? currentRecord.options : null) || fallbackStep.options;
+  const currentStep = { title: remoteStep?.title || fallbackStep.title, options: currentOptions, stepIndex: currentStepIndex, totalSteps: remoteStep?.totalSteps || totalSteps };
   const metrics = [
     { label: '时间', value: Math.max(72 - branch.steps.length * 5, 0), tone: 'blue' },
     { label: '掌握度', value: Math.min(18 + branch.steps.length * 8, 100), tone: 'green' },
@@ -1044,34 +1023,35 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
     setIsAnalyzing(true);
     let remoteAnalysis = null;
     let remoteNext = null;
+    let remoteEnded = false;
     if (branch.apiSessionId) {
       try {
         const remote = await apiRequest(`/api/sessions/${branch.apiSessionId}/choose`, { method: 'POST', body: JSON.stringify({ option_key: selectedKey }) });
-        remoteAnalysis = mapApiAnalysis(remote.analysis);
+        remoteAnalysis = mapApiAnalysis(remote.analysis, remote.generation);
         remoteNext = remote.next_step;
+        remoteEnded = Boolean(remote.ended || remoteNext?.terminal || remote.analysis?.terminal);
       } catch { /* local demo fallback */ }
     }
-    window.setTimeout(() => {
-      const nextRecord = createStepRecord(currentStepIndex, selectedOption, currentApiStepId, currentOptions);
-      const nextSteps = [...branch.steps.filter((step) => step.stepIndex !== currentStepIndex && step.stepIndex < currentStepIndex), nextRecord]
-        .sort((left, right) => left.stepIndex - right.stepIndex);
-      const nextBranch = { ...branch, steps: nextSteps };
-      setAnalysis(remoteAnalysis || { ...demoAnalysis, title: selectedOption.key === 'B' && currentStepIndex === 1 ? demoAnalysis.title : `你选了${selectedOption.text}` });
-      setIsAnalyzing(false);
-      setPendingBranch(nextBranch);
-      setPendingRemoteStep(remoteNext);
-    }, 800);
+    const resolvedAnalysis = remoteAnalysis || { ...buildLocalGoalAnalysis(branch.goal, selectedOption), generationSource: 'fallback', generationStage: 'request' };
+    const nextRecord = createStepRecord(currentStepIndex, selectedOption, currentApiStepId, currentOptions, resolvedAnalysis);
+    const nextSteps = [...branch.steps.filter((step) => step.stepIndex !== currentStepIndex && step.stepIndex < currentStepIndex), nextRecord]
+      .sort((left, right) => left.stepIndex - right.stepIndex);
+    const nextBranch = { ...branch, steps: nextSteps };
+    setAnalysis(resolvedAnalysis);
+    setIsAnalyzing(false);
+    setPendingBranch(nextBranch);
+    setPendingRemoteStep(remoteNext ? { ...remoteNext, totalSteps: remoteAnalysis?.totalSteps || branch.totalSteps || DEFAULT_TOTAL_STEPS, stagePlan: remoteAnalysis?.stagePlan || branch.stagePlan || [], terminal: remoteEnded } : (remoteEnded ? { terminal: true } : null));
   };
 
   const handleContinue = () => {
     if (!pendingBranch) return;
-    if (currentStepIndex === totalDecisionSteps) {
-      const ended = { ...pendingBranch, status: 'ended', outcome: createOutcome(pendingBranch) };
+    if (pendingRemoteStep?.terminal || (!pendingRemoteStep && currentStepIndex >= totalSteps)) {
+      const ended = { ...pendingBranch, status: 'ended', outcome: analysis?.outcome ? { ...createOutcome(pendingBranch), rating: analysis.outcome.status, review: analysis.outcome.summary } : createOutcome(pendingBranch) };
       onBranchUpdate(ended);
       onOutcome(ended);
       return;
     }
-    const nextBranch = { ...pendingBranch, apiStepId: pendingRemoteStep?.id || branch.apiStepId, remoteStep: pendingRemoteStep || branch.remoteStep };
+    const nextBranch = { ...pendingBranch, totalSteps: Number(pendingRemoteStep?.totalSteps) || branch.totalSteps || DEFAULT_TOTAL_STEPS, stagePlan: pendingRemoteStep?.stagePlan || branch.stagePlan || [], apiStepId: pendingRemoteStep?.id || branch.apiStepId, remoteStep: pendingRemoteStep || branch.remoteStep };
     onBranchUpdate(nextBranch);
     setRemoteStep(pendingRemoteStep || null);
     setCurrentStepIndex(currentStepIndex + 1);
@@ -1102,7 +1082,7 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
         </button> : null}
         {isAnalyzing ? <AnalysisCard isLoading /> : null}
         {analysis ? <><AnalysisCard data={analysis} isLoading={false} /><SourceCard sources={analysis.sources} /></> : null}
-        {analysis && pendingBranch ? <button className="confirm-choice-button next-step-button" type="button" onClick={handleContinue}>{currentStepIndex === totalDecisionSteps ? '查看结局复盘' : '进入下一步选择'} <ArrowRight size={16} /></button> : null}
+        {analysis && pendingBranch ? <button className="confirm-choice-button next-step-button" type="button" onClick={handleContinue}>{currentStepIndex === totalSteps ? '查看结局复盘' : '进入下一步选择'} <ArrowRight size={16} /></button> : null}
       </div>
     </main>
   );
@@ -1163,7 +1143,8 @@ function App() {
       apiSessionId = remote.session_id;
       remoteStep = remote.step;
     } catch { /* local demo fallback */ }
-    const session = { id: sessionId, goal: payload.goal.trim(), createdAt: new Date().toISOString(), branches: [{ ...branch, apiSessionId, apiBranchId: remoteStep?.branchId || null, apiStepId: remoteStep?.id || null, remoteStep }], activeBranchId: branch.id, branchCounter: 1 };
+    const totalSteps = Math.min(10, Math.max(8, Number(remoteStep?.totalSteps) || DEFAULT_TOTAL_STEPS));
+    const session = { id: sessionId, goal: payload.goal.trim(), createdAt: new Date().toISOString(), totalSteps, stagePlan: remoteStep?.stagePlan || [], branches: [{ ...branch, totalSteps, stagePlan: remoteStep?.stagePlan || [], apiSessionId, apiBranchId: remoteStep?.branchId || null, apiStepId: remoteStep?.id || null, remoteStep }], activeBranchId: branch.id, branchCounter: 1 };
     setSessions((current) => [...current, session]);
     setActiveSessionId(sessionId);
     setResumeStep(1);
@@ -1200,7 +1181,7 @@ function App() {
         remoteStep = remote.step || null;
       } catch { /* local branch fallback */ }
     }
-    const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), currentBranch.id, stepIndex, currentBranch.steps.filter((step) => step.stepIndex <= stepIndex)), goal: currentSession.goal, goalFirstStep: currentBranch.goalFirstStep || buildGoalFirstStep(currentSession.goal), apiSessionId: currentBranch.apiSessionId, apiBranchId, apiStepId, remoteStep };
+    const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), currentBranch.id, stepIndex, currentBranch.steps.filter((step) => step.stepIndex <= stepIndex)), totalSteps: currentBranch.totalSteps || currentSession.totalSteps || DEFAULT_TOTAL_STEPS, stagePlan: currentBranch.stagePlan || currentSession.stagePlan || [], goal: currentSession.goal, goalFirstStep: currentBranch.goalFirstStep || buildGoalFirstStep(currentSession.goal), apiSessionId: currentBranch.apiSessionId, apiBranchId, apiStepId, remoteStep };
     const nextSession = { ...currentSession, branches: [...currentSession.branches, branch], activeBranchId: branch.id, branchCounter: nextCounter };
     updateSession(nextSession);
     setActiveSessionId(nextSession.id);
@@ -1240,7 +1221,7 @@ function App() {
     const nextSession = { ...session, activeBranchId: branchId };
     updateSession(nextSession);
     setActiveSessionId(sessionId);
-    setResumeStep(Math.min(branch.steps.length + 1, totalDecisionSteps));
+    setResumeStep(Math.min(branch.steps.length + 1, Number(branch.totalSteps) || DEFAULT_TOTAL_STEPS));
     navigate(`/simulate/${sessionId}/${branchId}`, { stage: 'simulation', sessionId, branchId });
   };
 
@@ -1251,7 +1232,7 @@ function App() {
   if (!currentSession || !currentBranch) return <HistoryListPage sessions={sessions} onOpenSession={(id) => navigate(`/history/${id}`, { stage: 'history-detail', sessionId: id })} onHome={() => navigate('/', { stage: 'entry' })} />;
   if (route.stage === 'simulation') return <SimulationPage key={currentBranch.id} branch={currentBranch} initialStepIndex={resumeStep} onBranchUpdate={handleBranchUpdate} onOutcome={handleOutcome} />;
   if (route.stage === 'outcome') return <OutcomePage branch={currentBranch} endedBranches={endedBranches} canCompare={endedBranches.length >= 2} onSwitchBranch={(branchId) => navigate(`/outcome/${currentSession.id}/${branchId}`, { stage: 'outcome', sessionId: currentSession.id, branchId })} onBacktrack={handleOutcomeBacktrack} onCompare={() => navigate(`/compare/${currentSession.id}`, { stage: 'compare', sessionId: currentSession.id })} onReport={handleOpenReport} onRestart={() => createNewBranch(currentSession.id)} onHome={() => navigate('/', { stage: 'entry' })} />;
-  if (route.stage === 'outcome-timeline') return <TimelinePage history={currentBranch.steps} currentStepIndex={totalDecisionSteps} currentBranchName={currentBranch.name} newBranchName={getBranchName(currentSession.branchCounter + 1)} returnLabel="返回结局" onReturnSimulation={() => navigate(`/outcome/${currentSession.id}/${currentBranch.id}`, { stage: 'outcome', sessionId: currentSession.id, branchId: currentBranch.id })} onReturnStep={handleCreateBranch} />;
+  if (route.stage === 'outcome-timeline') return <TimelinePage history={currentBranch.steps} currentStepIndex={Number(currentBranch.totalSteps) || DEFAULT_TOTAL_STEPS} currentBranchName={currentBranch.name} newBranchName={getBranchName(currentSession.branchCounter + 1)} returnLabel="返回结局" onReturnSimulation={() => navigate(`/outcome/${currentSession.id}/${currentBranch.id}`, { stage: 'outcome', sessionId: currentSession.id, branchId: currentBranch.id })} onReturnStep={handleCreateBranch} />;
   if (route.stage === 'compare') return <BranchComparisonPage branches={endedBranches} onReturnOutcome={() => navigate(`/outcome/${currentSession.id}/${currentBranch.id}`, { stage: 'outcome', sessionId: currentSession.id, branchId: currentBranch.id })} />;
   if (route.stage === 'report') return <ReportPage branch={currentBranch} apiSessionId={currentBranch.apiSessionId} onBack={() => navigate(`/outcome/${currentSession.id}/${currentBranch.id}`, { stage: 'outcome', sessionId: currentSession.id, branchId: currentBranch.id })} onRestart={() => createNewBranch(currentSession.id)} />;
   return null;
