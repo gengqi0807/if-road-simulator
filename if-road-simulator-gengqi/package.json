@@ -1,0 +1,25 @@
+{
+  "name": "if-road-simulator",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "node --env-file=.env api-server.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:store": "node scripts/test-store.mjs",
+    "test:api": "node scripts/test-api.mjs",
+    "test:branch": "node scripts/test-branch.mjs",
+    "test:report": "node scripts/test-report.mjs",
+    "test:llm": "node --env-file=.env scripts/test-llm.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-router-dom": "^7.18.3",
+    "vite": "latest"
+  }
+}

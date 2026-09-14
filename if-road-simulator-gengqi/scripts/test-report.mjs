@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { DemoStore } from '../src/lib/demo-store.js';
+const store = new DemoStore();
+const { session, step } = store.createSession({ goal: '我想学会洛必达法则' });
+store.choose(session.id, 'B');
+const report = store.report(session.id);
+assert.equal(report.report_type, 'global');
+assert.match(report.guide, /每天/);
+assert.equal(report.steps.length, 1);
+const draft = store.publish(session.id);
+assert.equal(draft.status, 'draft');
+assert.match(draft.content, /洛必达/);
+assert.throws(() => store.report('missing'), /session not found/);
+console.log('Report checks passed');
