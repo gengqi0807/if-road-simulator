@@ -6,6 +6,7 @@ import HistoryListPage from './pages/HistoryListPage';
 import HistoryDetailPage from './pages/HistoryDetailPage';
 import ReportPage from './pages/ReportPage';
 import { ToastProvider } from './components/Toast';
+import { buildGoalFirstStep } from './lib/demo-data';
 
 const defaultGoalForm = {
   goal: '',
@@ -22,13 +23,6 @@ const stepTitles = [
   '遇到卡住的题目时，你会怎么做？',
   '怎样判断自己已经掌握？',
   '最后，你想留下哪种学习节奏？',
-];
-
-const firstStepOptions = [
-  { key: 'A', text: '先学极限，打好基础' },
-  { key: 'B', text: '直接学洛必达，遇到问题再补' },
-  { key: 'C', text: '先刷题，感受一下难度' },
-  { key: 'D', text: '先看几何直觉，建立画面感' },
 ];
 
 const secondStepOptions = {
@@ -73,7 +67,6 @@ function getNextOptions(stepIndex, selectedKey) {
 }
 
 function getOptionsForStep(stepIndex) {
-  if (stepIndex === 1) return firstStepOptions;
   if (stepIndex === 2) return secondStepOptions.B;
   return laterStepOptions[stepIndex - 3] || laterStepOptions[laterStepOptions.length - 1];
 }
@@ -1031,12 +1024,13 @@ function SimulationPage({ branch, initialStepIndex = null, onBranchUpdate, onOut
   const apiOptions = remoteStep && remoteStep.index === currentStepIndex
     ? remoteStep.options.map((option) => ({ key: option.key, text: option.text, meta: option.meta || '' }))
     : null;
+  const goalFirstStep = branch.goalFirstStep || buildGoalFirstStep(branch.goal || '');
   const currentOptions = apiOptions || (currentRecord?.options?.length ? currentRecord.options : null) || (currentStepIndex === 1
-    ? firstStepOptions
+    ? goalFirstStep.options
     : currentStepIndex === 2
       ? getNextOptions(1, branch.steps.find((step) => step.stepIndex === 1)?.optionKey || 'B')
       : getOptionsForStep(currentStepIndex));
-  const currentStep = { title: remoteStep?.title || stepTitles[currentStepIndex - 1], options: currentOptions, stepIndex: currentStepIndex, totalSteps: totalDecisionSteps };
+  const currentStep = { title: remoteStep?.title || (currentStepIndex === 1 ? goalFirstStep.title : stepTitles[currentStepIndex - 1]), options: currentOptions, stepIndex: currentStepIndex, totalSteps: totalDecisionSteps };
   const metrics = [
     { label: '时间', value: Math.max(72 - branch.steps.length * 5, 0), tone: 'blue' },
     { label: '掌握度', value: Math.min(18 + branch.steps.length * 8, 100), tone: 'green' },
@@ -1159,6 +1153,9 @@ function App() {
   const startSession = async (payload) => {
     const sessionId = `session-${Date.now()}`;
     const branch = createBranch('branch-1', '分支 A');
+    const goalFirstStep = buildGoalFirstStep(payload.goal, { level: payload.foundation });
+    branch.goal = payload.goal.trim();
+    branch.goalFirstStep = goalFirstStep;
     let apiSessionId = null;
     let remoteStep = null;
     try {
@@ -1203,7 +1200,7 @@ function App() {
         remoteStep = remote.step || null;
       } catch { /* local branch fallback */ }
     }
-    const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), currentBranch.id, stepIndex, currentBranch.steps.filter((step) => step.stepIndex <= stepIndex)), apiSessionId: currentBranch.apiSessionId, apiBranchId, apiStepId, remoteStep };
+    const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), currentBranch.id, stepIndex, currentBranch.steps.filter((step) => step.stepIndex <= stepIndex)), goal: currentSession.goal, goalFirstStep: currentBranch.goalFirstStep || buildGoalFirstStep(currentSession.goal), apiSessionId: currentBranch.apiSessionId, apiBranchId, apiStepId, remoteStep };
     const nextSession = { ...currentSession, branches: [...currentSession.branches, branch], activeBranchId: branch.id, branchCounter: nextCounter };
     updateSession(nextSession);
     setActiveSessionId(nextSession.id);
@@ -1217,7 +1214,7 @@ function App() {
     if (!session || !parentBranch) return;
 
     const nextCounter = session.branchCounter + 1;
-    const branch = createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), parentBranch.id, 0);
+    const branch = { ...createBranch(`branch-${nextCounter}`, getBranchName(nextCounter), parentBranch.id, 0), goal: session.goal, goalFirstStep: parentBranch.goalFirstStep || buildGoalFirstStep(session.goal) };
     const nextSession = {
       ...session,
       branches: [...session.branches, branch],

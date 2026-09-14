@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { analysisFor, demoPath } from './demo-data.js';
+import { analysisFor, buildGoalFirstStep, demoPath } from './demo-data.js';
 import { isValidSessionInput } from './types.js';
 
 export class DemoStore {
@@ -9,7 +9,8 @@ export class DemoStore {
     if (!isValidSessionInput(input)) throw new Error('goal must be at least 2 characters');
     const id = randomUUID();
     const rootBranch = { id: randomUUID(), sessionId: id, parentBranchId: null, forkStepId: null, name: '主路径', status: 'active' };
-    const first = this.#makeStep(id, rootBranch.id, 1, demoPath.steps[0], null, null);
+    const firstTemplate = buildGoalFirstStep(input.goal, input.constraints || {});
+    const first = this.#makeStep(id, rootBranch.id, 1, firstTemplate, null, null);
     const session = {
       id, goal: input.goal.trim(), scene: input.scene || 'subject',
       constraints: input.constraints || demoPath.constraints, status: 'active',
@@ -46,7 +47,9 @@ export class DemoStore {
     const target = session.steps.find((step) => step.id === stepId);
     if (!target) throw new Error('step not found');
     const branch = { id: randomUUID(), sessionId: id, parentBranchId: target.branchId, forkStepId: target.id, name: `分支 ${session.branches.length}`, status: 'active' };
-    const template = demoPath.steps[Math.max(0, Math.min(target.index - 1, demoPath.steps.length - 1))];
+    const template = target.index === 1
+      ? buildGoalFirstStep(session.goal, session.constraints)
+      : demoPath.steps[Math.max(0, Math.min(target.index - 1, demoPath.steps.length - 1))];
     const step = this.#makeStep(id, branch.id, target.index, template, target.parentStepId, null);
     session.branches.push(branch); session.steps.push(step); session.currentStepId = step.id; session.status = 'active';
     return { session, branch, step };
