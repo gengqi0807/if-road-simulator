@@ -177,10 +177,6 @@ function EntryGate({ onQuickStart, onZhihuLogin, onHistory }) {
 
         <div className="entry-nav-actions">
           <button className="outline-nav-button" type="button" onClick={onHistory}>历史</button>
-          <div className="demo-badge">
-            <span className="status-dot" />
-          知乎实时数据 · Demo 兜底
-          </div>
         </div>
       </header>
 
@@ -202,7 +198,6 @@ function EntryGate({ onQuickStart, onZhihuLogin, onHistory }) {
         <div className="entry-card">
           <div className="card-header-row">
             <div className="card-title">开始你的路径</div>
-            <span className="meta-badge">体验版</span>
           </div>
 
           <div className="primary-actions">
@@ -275,10 +270,6 @@ function GoalForm({ initialGoal, onSubmit }) {
           </div>
         </div>
 
-        <div className="demo-badge">
-          <span className="status-dot" />
-          知乎实时数据 · Demo 兜底
-        </div>
       </header>
 
       <section className="goal-panel">
@@ -540,7 +531,7 @@ function SourceCard({ sources }) {
               <div className="source-meta">
                 <span>{source.author}</span>
                 <span>{source.publishedAt}</span>
-                {source.isDemo ? <span className="demo-source-label">预置 Demo 资料</span> : null}
+                {source.isDemo ? <span className="demo-source-label">参考资料</span> : null}
               </div>
             </div>
             <ArrowRight size={16} />
@@ -836,11 +827,11 @@ function BranchComparisonPage({ branches, onReturnOutcome }) {
   }, [apiSessionId, selectedIds.join(','), branches]);
   return (
     <main className="comparison-page">
-      <header className="comparison-header"><div><span className="eyebrow-pill"><Sparkles size={15} /> 路径对比</span><h1>已完成路径的对比</h1><p>只有完成全部 5 个决策点的分支会出现在这里。</p></div><button className="outline-nav-button" type="button" onClick={onReturnOutcome}>返回结局</button></header>
+  <header className="comparison-header"><div><span className="eyebrow-pill"><Sparkles size={15} /> 路径对比</span><h1>已完成路径的对比</h1><p>完成全部决策点的分支会出现在这里。</p></div><button className="outline-nav-button" type="button" onClick={onReturnOutcome}>返回结局</button></header>
       {branches.length < 2 ? <section className="timeline-empty comparison-empty">请先在推演页完成至少两条路径</section> : <>
         <div className="branch-filter-row">{branches.map((branch) => <label key={branch.id}><input type="checkbox" checked={selectedIds.includes(branch.id)} onChange={() => toggleBranch(branch.id)} /> {branch.name}</label>)}</div>
         <div className="comparison-layout">
-          <section className="comparison-table-card"><div className="comparison-table-wrap"><table className="comparison-table"><thead><tr><th>对比指标</th>{selectedBranches.map((branch) => <th key={branch.id}>{branch.name}<small>已完成</small></th>)}</tr></thead><tbody>{rows.map(([label, getter], rowIndex) => <tr key={label}><th>{label}</th>{selectedBranches.map((branch, branchIndex) => <td key={branch.id}>{remoteComparison && rowIndex === 0 ? `${remoteComparison.metrics.time_days[branchIndex === 0 ? 'a' : 'b']} 天` : remoteComparison && rowIndex === 1 ? `${Math.round(remoteComparison.metrics.mastery[branchIndex === 0 ? 'a' : 'b'] * 100)}%` : getter(branch)}</td>)}</tr>)}</tbody></table></div>{remoteComparison ? <p className="comparison-remote-note">已同步 Demo 后端对比结果：{remoteComparison.summary}</p> : null}</section>
+          <section className="comparison-table-card"><div className="comparison-table-wrap"><table className="comparison-table"><thead><tr><th>对比指标</th>{selectedBranches.map((branch) => <th key={branch.id}>{branch.name}<small>已完成</small></th>)}</tr></thead><tbody>{rows.map(([label, getter], rowIndex) => <tr key={label}><th>{label}</th>{selectedBranches.map((branch, branchIndex) => <td key={branch.id}>{remoteComparison && rowIndex === 0 ? `${remoteComparison.metrics.time_days[branchIndex === 0 ? 'a' : 'b']} 天` : remoteComparison && rowIndex === 1 ? `${Math.round(remoteComparison.metrics.mastery[branchIndex === 0 ? 'a' : 'b'] * 100)}%` : getter(branch)}</td>)}</tr>)}</tbody></table></div>{remoteComparison ? <p className="comparison-remote-note">已同步路径对比结果：{remoteComparison.summary}</p> : null}</section>
           {selectedBranches.length ? <MultiRadarChart branches={selectedBranches.map((branch) => ({ ...branch, radar: branch.outcome?.radar || [72, 76, 70, 74, 78] }))} /> : <section className="radar-card timeline-empty">至少选择一条分支</section>}
         </div>
       </>}
