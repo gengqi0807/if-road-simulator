@@ -2496,6 +2496,84 @@ button:disabled {
     font-size: 14px;
   }
 }
+
+/* Mobile web adaptation: layout-only, no feature changes. */
+@media (max-width: 720px) {
+  body { min-width: 320px; overflow-x: hidden; }
+  .landing-shell, .goal-shell { padding: 16px 14px 32px; }
+  .topbar { margin-bottom: 18px; padding: 6px 0; }
+  .brand-stack { min-width: 0; }
+  .brand-stack small { display: none; }
+  .brand-text { font-size: 1.08rem; }
+  .entry-nav-actions { gap: 6px; }
+  .entry-nav-actions .outline-nav-button { min-height: 44px; padding-inline: 10px; }
+  .offline-demo-banner { top: 8px; max-width: calc(100vw - 20px); font-size: .7rem; }
+  .hero-content, .goal-panel { width: 100%; }
+  .hero-title { font-size: clamp(2.15rem, 11vw, 3.25rem); line-height: 1.16; }
+  .hero-subtitle { font-size: .9rem; }
+  .goal-form { padding: 18px 14px; }
+  .field-grid { gap: 12px; }
+  .simulation-status-bar { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; min-height: 0; padding: 12px 14px; }
+  .step-count { font-size: .8rem; }
+  .resource-status { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+  .resource-label { font-size: .65rem; }
+  .resource-label strong { font-size: .65rem; }
+  .backtrack-button { grid-column: 2; grid-row: 1; min-height: 44px; padding: 8px 10px; font-size: .72rem; }
+  .simulation-content { width: 100%; padding: 158px 14px 42px; }
+  .simulation-branch-label { font-size: .72rem; }
+  .choice-card { padding: 22px 16px; }
+  .choice-card h1 { font-size: 1.55rem; }
+  .choice-card-heading { margin-bottom: 20px; }
+  .choice-card-heading p { font-size: .82rem; }
+  .choice-option { grid-template-columns: 8px 30px minmax(0,1fr) 16px; min-height: 60px; gap: 9px; padding: 11px 10px; }
+  .choice-text { font-size: .88rem; line-height: 1.45; }
+  .choice-meta { font-size: .7rem; }
+  .confirm-choice-button { width: 100%; min-height: 48px; margin-top: 14px; }
+  .analysis-card { padding: 20px 16px; }
+  .analysis-card-header { align-items: flex-start; }
+  .analysis-confidence { margin-left: 0; }
+  .analysis-summary { font-size: .88rem; }
+  .analysis-blocker { padding: 12px; }
+  .metric-changes { grid-template-columns: 1fr; gap: 8px; }
+  .source-card { padding: 14px; }
+  .timeline-page, .comparison-page, .history-page { padding: 24px 14px 48px; }
+  .timeline-header h1, .comparison-header h1 { font-size: 1.8rem; line-height: 1.25; }
+  .timeline-header p, .comparison-header p { font-size: .82rem; }
+  .timeline-header-actions { align-items: stretch; flex-direction: column; gap: 10px; }
+  .timeline-header-actions .outline-nav-button { width: 100%; }
+  .timeline-node-card { padding: 16px 14px; }
+  .timeline-node-card h2 { font-size: 1rem; }
+  .timeline-expanded-analysis { padding: 12px; }
+  .timeline-return-button { width: 100%; min-height: 44px; margin-top: 10px; }
+  .comparison-layout { display: block; }
+  .comparison-table-card { overflow: hidden; }
+  .comparison-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .comparison-table { min-width: 560px; }
+  .comparison-table th, .comparison-table td { padding: 10px 9px; font-size: .78rem; }
+  .radar-card { margin-top: 14px; padding: 16px 10px; overflow: hidden; }
+  .radar-chart { width: min(100%, 300px); margin-inline: auto; }
+  .report-page { padding: 18px 14px 72px; }
+  .report-header { gap: 10px; }
+  .report-header h1 { font-size: 1.75rem; }
+  .report-section { padding: 18px 14px; }
+  .report-section h2 { font-size: 1.25rem; }
+  .report-markdown { font-size: .88rem; line-height: 1.75; overflow-wrap: anywhere; }
+  .report-source-item { padding: 12px 0; }
+  .report-actions .btn, .report-actions .outline-nav-button { min-height: 48px; }
+  .timeline-confirm-modal { width: min(100% - 28px, 440px); padding: 20px 16px; }
+  .timeline-modal-actions { flex-direction: column-reverse; }
+  .timeline-modal-actions .btn { width: 100%; min-height: 46px; }
+}
+
+@media (max-width: 390px) {
+  .entry-nav-actions .outline-nav-button:first-child { display: none; }
+  .hero-title { font-size: 2.15rem; }
+  .simulation-content { padding-inline: 10px; }
+  .choice-card, .analysis-card { padding-inline: 13px; }
+  .choice-option { grid-template-columns: 8px 27px minmax(0,1fr) 14px; gap: 7px; padding-inline: 8px; }
+  .choice-text { font-size: .82rem; }
+  .resource-status { gap: 5px; }
+}
   .comparison-selectors {
     grid-template-columns: 1fr;
     gap: 10px;
